@@ -10,8 +10,6 @@
 
 namespace Topvisor\PDO_CH;
 
-include(__DIR__.'/formats.php');
-
 class PDO_CH{
 
 	protected $curlHundler = NULL;
