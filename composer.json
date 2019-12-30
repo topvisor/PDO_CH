@@ -1,11 +1,11 @@
 {
-	"name":"topvisor/topvisor-sdk",
-	"description":"Topvisor SDK",
+	"name":"topvisor/pdo_ch",
+	"description":"PHP ClickHouse HTTP client",
 	"keywords":[
-		"Topvisor",
-		"Проверка позиций сайтов",
-		"Rank Tracker",
-		"Rank Checker"
+		"clickhouse",
+		"http client",
+		"php",
+		"curl"
 	],
 	"license":"MIT",
 	"type":"library",
