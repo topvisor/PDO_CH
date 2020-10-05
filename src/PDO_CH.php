@@ -24,7 +24,6 @@ class PDO_CH{
 	protected $username = NULL;
 	protected $password = NULL;
 	protected $curlOptions = [];
-	protected $curlTotalTime = NULL; // время последнего выполненного CURL запроса
 
 	function __construct(string $dsn, string $username = NULL, string $password, array $options = NULL, $curlOptions = NULL){
 		$this->dsn = $dsn;
@@ -137,8 +136,6 @@ class PDO_CH{
 
 		$this->setCurlOptions($query, $queryOptions, $curlOptions);
 		$result = curl_exec($this->curlHundler);
-
-		$this->curlTotalTime = curl_getinfo($this->curlHundler, CURLINFO_TOTAL_TIME);
 
 		if(curl_errno($this->curlHundler)){
 			$this->throwError('Curl: '.curl_error($this->curlHundler), curl_errno($this->curlHundler));
@@ -265,8 +262,8 @@ class PDO_CH{
 		return (array)$this->meta;
 	}
 
-	function getTotalTime(){
-		return (float)$this->curlTotalTime;
+	function getCurlHundler(){
+		return $this->curlHundler;
 	}
 
 }
