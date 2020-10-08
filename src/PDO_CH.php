@@ -110,6 +110,7 @@ class PDO_CH{
 
 		$this->rows_before_limit_at_least = NULL;
 		$this->statistics = NULL;
+		$this->meta = NULL;
 
 		$query = $this->query;
 		$this->query = NULL; // освободить память
