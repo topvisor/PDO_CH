@@ -105,7 +105,8 @@ class PDO_CH{
 		throw new \Exception($this->error->message, $this->error->code);
 	}
 
-	protected function call(string $format = NULL, array $queryOptions = NULL, array $curlOptions = []){
+	// внимание: при установки $async = true нет гарантии, что запрос будет выполнен, эмулируется через таймаут в 100 ms
+	protected function call(string $format = NULL, array $queryOptions = NULL, array $curlOptions = [], bool $async = false){
 		$queryOptions = array_merge($this->options, (array)$queryOptions);
 
 		$this->rows_before_limit_at_least = NULL;
@@ -135,10 +136,13 @@ class PDO_CH{
 			}
 		}
 
+		if($async) $curlOptions[CURLOPT_TIMEOUT_MS] = 100;
 		$this->setCurlOptions($query, $queryOptions, $curlOptions);
 		$result = curl_exec($this->curlHundler);
 
 		if(curl_errno($this->curlHundler)){
+			if($async and curl_errno($this->curlHundler) == 28 and curl_getinfo($this->curlHundler)['size_upload']) return '';
+
 			$this->throwError('Curl: '.curl_error($this->curlHundler), curl_errno($this->curlHundler));
 		}
 
@@ -217,11 +221,11 @@ class PDO_CH{
 		return $this->call($format, $options, $curlOptions);
 	}
 
-	function exec(string $query, array $options = NULL, array $curlOptions = []){
+	function exec(string $query, array $options = NULL, array $curlOptions = [], bool $async = false){
 		$this->query = $query;
 		$this->resourceQuery = NULL;
 
-		$result = $this->call(NULL, $options, $curlOptions);
+		$result = $this->call(NULL, $options, $curlOptions, $async);
 
 		if($result === '') return true;
 	}
