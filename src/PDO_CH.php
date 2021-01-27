@@ -105,7 +105,7 @@ class PDO_CH{
 		throw new \Exception($this->error->message, $this->error->code);
 	}
 
-	// внимание: при установки $async = true нет гарантии, что запрос будет выполнен, эмулируется через таймаут в 100 ms
+	// внимание: при установки $async = true нет гарантии, что запрос будет выполнен, эмулируется через таймаут в 200 ms
 	protected function call(string $format = NULL, array $queryOptions = NULL, array $curlOptions = [], bool $async = false){
 		$queryOptions = array_merge($this->options, (array)$queryOptions);
 
@@ -136,7 +136,7 @@ class PDO_CH{
 			}
 		}
 
-		if($async) $curlOptions[CURLOPT_TIMEOUT_MS] = 100;
+		if($async) $curlOptions[CURLOPT_TIMEOUT_MS] = 200;
 		$this->setCurlOptions($query, $queryOptions, $curlOptions);
 		$result = curl_exec($this->curlHundler);
 
