@@ -70,14 +70,18 @@ class PDO_CH{
 		if($this->resourceQuery){
 			$url .= '&query='.urlencode($query);
 
-			curl_setopt($this->curlHundler, CURLOPT_UPLOAD, true);
-			curl_setopt($this->curlHundler, CURLOPT_READFUNCTION, function($ch, $fd, $length){
-				return fread($this->resourceQuery, $length);
-			});
+//			// метод PUT не работает с версии  22.3
+//			curl_setopt($this->curlHundler, CURLOPT_UPLOAD, true);
+//			curl_setopt($this->curlHundler, CURLOPT_READFUNCTION, function($ch, $fd, $length){
+//				return fread($this->resourceQuery, $length);
+//			});
+
+			curl_setopt($this->curlHundler, CURLOPT_POST, true);
+			curl_setopt($this->curlHundler, CURLOPT_INFILE, $this->resourceQuery);
 		}else{
 			if($queryOptions['enable_http_compression']??NULL) $query = gzencode($query);
 
-			curl_setopt($this->curlHundler, CURLOPT_POST, 1);
+			curl_setopt($this->curlHundler, CURLOPT_POST, true);
 			curl_setopt($this->curlHundler, CURLOPT_POSTFIELDS, $query);
 		}
 
@@ -139,6 +143,7 @@ class PDO_CH{
 		if($async) $curlOptions[CURLOPT_TIMEOUT_MS] = 200;
 		$this->setCurlOptions($query, $queryOptions, $curlOptions);
 		$result = curl_exec($this->curlHundler);
+		vd($result);
 
 		if(curl_errno($this->curlHundler)){
 			if($async and curl_errno($this->curlHundler) == 28 and curl_getinfo($this->curlHundler)['size_upload']) return '';
