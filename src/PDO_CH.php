@@ -143,7 +143,6 @@ class PDO_CH{
 		if($async) $curlOptions[CURLOPT_TIMEOUT_MS] = 200;
 		$this->setCurlOptions($query, $queryOptions, $curlOptions);
 		$result = curl_exec($this->curlHundler);
-		vd($result);
 
 		if(curl_errno($this->curlHundler)){
 			if($async and curl_errno($this->curlHundler) == 28 and curl_getinfo($this->curlHundler)['size_upload']) return '';
