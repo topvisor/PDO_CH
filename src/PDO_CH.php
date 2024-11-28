@@ -25,7 +25,7 @@ class PDO_CH{
 	protected $password = NULL;
 	protected $curlOptions = [];
 
-	function __construct(string $dsn, ?string $username = NULL, string $password, ?array $options = NULL, ?array $curlOptions = NULL){
+	function __construct(string $dsn, string $username, string $password, ?array $options = NULL, ?array $curlOptions = NULL){
 		$this->dsn = $dsn;
 		$this->options = $options;
 		$this->username = $username;
