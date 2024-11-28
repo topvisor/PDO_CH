@@ -25,7 +25,7 @@ class PDO_CH{
 	protected $password = NULL;
 	protected $curlOptions = [];
 
-	function __construct(string $dsn, string $username = NULL, string $password, array $options = NULL, $curlOptions = NULL){
+	function __construct(string $dsn, ?string $username = NULL, string $password, ?array $options = NULL, ?array $curlOptions = NULL){
 		$this->dsn = $dsn;
 		$this->options = $options;
 		$this->username = $username;
@@ -110,7 +110,7 @@ class PDO_CH{
 	}
 
 	// внимание: при установки $async = true нет гарантии, что запрос будет выполнен, эмулируется через таймаут в 200 ms
-	protected function call(string $format = NULL, array $queryOptions = NULL, array $curlOptions = [], bool $async = false){
+	protected function call(?string $format = NULL, ?array $queryOptions = NULL, array $curlOptions = [], bool $async = false){
 		$queryOptions = array_merge($this->options, (array)$queryOptions);
 
 		$this->rows_before_limit_at_least = NULL;
@@ -191,7 +191,7 @@ class PDO_CH{
 		return $this;
 	}
 
-	function fetchColumn($column_number = 0, array $options = NULL, array $curlOptions = []){
+	function fetchColumn($column_number = 0, ?array $options = NULL, array $curlOptions = []){
 		$this->resourceQuery = NULL;
 
 		$result = $this->call(Formats::FETCH_NUM, $options, $curlOptions);
@@ -205,7 +205,7 @@ class PDO_CH{
 
 	// внимание, это SQL statement, не путать с PDOStatement
 	// всегда возвращает первую строку результата
-	function fetch($format = Formats::FETCH_ASSOC, array $options = NULL, array $curlOptions = []){
+	function fetch($format = Formats::FETCH_ASSOC, ?array $options = NULL, array $curlOptions = []){
 		$this->resourceQuery = NULL;
 		if($format != Formats::FETCH_OBJ and $format != Formats::FETCH_ASSOC and $format != Formats::FETCH_NUM and $format != Formats::FETCH_COLUMN){
 			$this->throwError('PDO_CH, fetch can only be used with FETCH_ASSOC or FETCH_NUM or FETCH_COLUMN');
@@ -219,13 +219,13 @@ class PDO_CH{
 		return $result;
 	}
 
-	function fetchAll($format = Formats::FETCH_ASSOC, array $options = NULL, array $curlOptions = []){
+	function fetchAll($format = Formats::FETCH_ASSOC, ?array $options = NULL, array $curlOptions = []){
 		$this->resourceQuery = NULL;
 
 		return $this->call($format, $options, $curlOptions);
 	}
 
-	function exec(string $query, array $options = NULL, array $curlOptions = [], bool $async = false){
+	function exec(string $query, ?array $options = NULL, array $curlOptions = [], bool $async = false){
 		$this->query = $query;
 		$this->resourceQuery = NULL;
 
@@ -234,7 +234,7 @@ class PDO_CH{
 		if($result === '') return true;
 	}
 
-	function execWithResource(string $query, $resource, string $format, array $options = NULL, array $curlOptions = []){
+	function execWithResource(string $query, $resource, string $format, ?array $options = NULL, array $curlOptions = []){
 		if(getType($resource) != 'resource') $this->throwError('$resource is not s valid resource');
 		if(get_resource_type($resource) != 'stream') $this->throwError('$resource is not a valid stream resource');
 

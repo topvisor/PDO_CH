@@ -65,7 +65,7 @@ class Formats{
 		return false;
 	}
 
-	static function prepareResult(string $result, string $format = NULL, int &$rows_before_limit_at_least = NULL, array &$statistics = NULL, array &$meta = NULL){
+	static function prepareResult(string $result, ?string $format = NULL, ?int &$rows_before_limit_at_least = NULL, ?array &$statistics = NULL, ?array &$meta = NULL){
 		$isAssocc = false;
 
 		switch($format){
