@@ -88,7 +88,7 @@ class PDO_CH{
 		curl_setopt($this->curlHundler, CURLOPT_URL, $url);
 	}
 
-	protected function genUrl(array $queryOptions = NULL){
+	protected function genUrl(?array $queryOptions = NULL){
 		$url = $this->dsn;
 		if($queryOptions) $url .= '/?'.http_build_query($queryOptions);
 
