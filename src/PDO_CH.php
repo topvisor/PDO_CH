@@ -35,12 +35,6 @@ class PDO_CH{
 		if($curlOptions) $this->curlOptions = $curlOptions;
 	}
 
-	function __destruct(){
-		if($this->curlHundler){
-			this->curlHundler = null;
-		}
-	}
-
 	protected function genCurl(){
 		$this->curlHundler = curl_init();
 	}
