@@ -36,7 +36,9 @@ class PDO_CH{
 	}
 
 	function __destruct(){
-		if($this->curlHundler) curl_close($this->curlHundler);
+		if($this->curlHundler){
+			this->curlHundler = null;
+		}
 	}
 
 	protected function genCurl(){
