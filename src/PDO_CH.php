@@ -158,11 +158,9 @@ class PDO_CH{
 
 		if($statusCode){
 			if($statusCode != 200){
-				if(preg_match('/Code: (\d+), (?:e\.code\(\) = (\d+), )?e\.displayText\(\) = (.+?), e\.what\(\) = (.+?)$/s', $result, $matches)){
-					$code = $matches[1];
-//					$code2 = $matches[2];
-					$message = $matches[3];
-//					$type = $matches[4];
+				if(preg_match('/^\s*Code: (\d+)\.\s*(.+)$/s', $result, $matches)){
+					$code = (int) $matches[1];
+					$message = $matches[2];
 				}else{
 					$message = $result;
 					$code = 0;
