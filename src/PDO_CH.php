@@ -1,236 +1,307 @@
 <?php
 
+declare(strict_types=1);
+
 // Поддерживаемые FETCH преобразования:
 //	PDO::FETCH_OBJ
 //	PDO::FETCH_ASSOC
 //	PDO::FETCH_NUM
 //	PDO::FETCH_COLUMN
 //	PDO::FETCH_KEY_PAIR
-//	Большинство родных CH форматов https://clickhouse.yandex/docs/ru/formats/index.html
+//	Большинство родных CH форматов https://clickhouse.com/docs/interfaces/formats
 
 namespace Topvisor\PDO_CH;
 
-class PDO_CH{
+use CurlHandle;
+use Exception;
+use Throwable;
 
-	protected $curlHundler = NULL;
-	protected $error = NULL;
-	protected $query = NULL;
-	protected $resourceQuery = NULL;
-	protected $options = NULL;
-	protected $dsn = NULL;
-	protected $rows_before_limit_at_least = NULL;
-	protected $statistics = NULL;
-	protected $meta = NULL;
-	protected $username = NULL;
-	protected $password = NULL;
-	protected $curlOptions = [];
+class PDO_CH {
 
-	function __construct(string $dsn, string $username, string $password, ?array $options = NULL, ?array $curlOptions = NULL){
-		$this->dsn = $dsn;
-		$this->options = $options;
-		$this->username = $username;
-		$this->password = $password;
+	protected CurlHandle $curlHundler;
+	protected ?Throwable $error = null;
+	protected ?string $query = null;
+	protected mixed $resourceQuery = null;
+	protected array $options = [];
+	protected ?int $rows_before_limit_at_least = null;
+	protected ?array $statistics = null;
+	protected ?array $meta = null;
+	protected array $curlOptions = [];
+
+	public function __construct(
+		protected readonly string $dsn,
+		protected readonly string $username,
+		protected readonly string $password,
+		?array $options = null,
+		?array $curlOptions = null,
+	) {
+		$this->options = $options ?? [];
+		$this->curlOptions = $curlOptions ?? [];
 		$this->genCurl();
-
-		if($curlOptions) $this->curlOptions = $curlOptions;
 	}
 
-	protected function genCurl(){
-		$this->curlHundler = curl_init();
+	protected function genCurl(): void {
+		$curlHundler = curl_init();
+		if (!$curlHundler) {
+			$this->throwError('Curl: failed to initialize');
+		}
+
+		$this->curlHundler = $curlHundler;
 	}
 
-	protected function setCurlOptions(string $query, array $queryOptions, array $curlOptions = []){
+	protected function setCurlOptions(string $query, array $queryOptions, array $curlOptions = []): void {
 		$url = $this->genUrl($queryOptions);
 
 		curl_reset($this->curlHundler);
 
-		curl_setopt($this->curlHundler, CURLOPT_HEADER, 1);
-		curl_setopt($this->curlHundler, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($this->curlHundler, CURLOPT_TIMEOUT, 60);
-		curl_setopt($this->curlHundler, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
-		curl_setopt($this->curlHundler, CURLOPT_SSL_VERIFYPEER, false);
-		curl_setopt($this->curlHundler, CURLOPT_SSL_VERIFYHOST, false);
+		$options = [
+			CURLOPT_HEADER => true,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_TIMEOUT => 60,
+			CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+			CURLOPT_SSL_VERIFYPEER => false,
+			CURLOPT_SSL_VERIFYHOST => false,
+		];
 
-		if($queryOptions['max_execution_time']??NULL) curl_setopt($this->curlHundler, CURLOPT_TIMEOUT, (int)$queryOptions['max_execution_time']);
-
-		$curlOptions = array_replace($this->curlOptions, $curlOptions);
-		curl_setopt_array($this->curlHundler, $curlOptions);
-
-		curl_setopt($this->curlHundler, CURLOPT_USERPWD, "$this->username:$this->password");
-
-		if($queryOptions['enable_http_compression']??NULL){
-			curl_setopt($this->curlHundler, CURLOPT_ENCODING, 'gzip');
-			curl_setopt($this->curlHundler, CURLOPT_HTTPHEADER, ['Content-Encoding: gzip']);
+		if ($queryOptions['max_execution_time'] ?? null) {
+			$options[CURLOPT_TIMEOUT] = (int) $queryOptions['max_execution_time'];
 		}
 
-		if($this->resourceQuery){
-			$url .= '&query='.urlencode($query);
+		$options = array_replace($options, $this->curlOptions, $curlOptions);
+		$options[CURLOPT_USERPWD] = "$this->username:$this->password";
 
-//			// метод PUT не работает с версии  22.3
-//			curl_setopt($this->curlHundler, CURLOPT_UPLOAD, true);
-//			curl_setopt($this->curlHundler, CURLOPT_READFUNCTION, function($ch, $fd, $length){
-//				return fread($this->resourceQuery, $length);
-//			});
+		$compression = !empty($queryOptions['enable_http_compression']);
+		if ($compression) {
+			$options[CURLOPT_ENCODING] ??= 'gzip';
 
-			curl_setopt($this->curlHundler, CURLOPT_POST, true);
-			curl_setopt($this->curlHundler, CURLOPT_INFILE, $this->resourceQuery);
-		}else{
-			if($queryOptions['enable_http_compression']??NULL) $query = gzencode($query);
+			$compressionCodec = null;
+			foreach ($options[CURLOPT_HTTPHEADER] ?? [] as $header) {
+				if (stripos($header, 'Content-Encoding:') === 0) {
+					preg_match('/Content-Encoding:\s*([\w-]+)/i', $header, $matches);
+					$compressionCodec = strtolower($matches[1]);
 
-			curl_setopt($this->curlHundler, CURLOPT_POST, true);
-			curl_setopt($this->curlHundler, CURLOPT_POSTFIELDS, $query);
+					break;
+				}
+			}
+
+			if ($compressionCodec === null) {
+				$compressionCodec = 'gzip';
+
+				$options[CURLOPT_HTTPHEADER][] = 'Content-Encoding: gzip';
+			}
 		}
 
-		curl_setopt($this->curlHundler, CURLOPT_URL, $url);
+		if ($this->resourceQuery !== null) {
+			$url .= '&query=' . urlencode($query);
+
+			// метод PUT не работает с версии 22.3
+			$options[CURLOPT_POST] = true;
+			$options[CURLOPT_INFILE] = $this->resourceQuery;
+		} else {
+			if ($compression) {
+				switch ($compressionCodec) {
+					case 'zstd':
+						if (!function_exists('zstd_compress')) {
+							$this->throwError('Curl: ext-zstd is required for zstd compression');
+						}
+
+						$compressedQuery = zstd_compress($query);
+						break;
+
+					case 'gzip':
+						$compressedQuery = gzencode($query);
+
+						break;
+
+					default:
+						$this->throwError('Curl: unsupported compression codec ' . $compressionCodec);
+				}
+
+				if ($compressedQuery === false) {
+					$this->throwError('Curl: failed to compress query');
+				}
+
+				$query = $compressedQuery;
+			}
+
+			$options[CURLOPT_POST] = true;
+			$options[CURLOPT_POSTFIELDS] = $query;
+		}
+
+		$options[CURLOPT_URL] = $url;
+
+		curl_setopt_array($this->curlHundler, $options);
 	}
 
-	protected function genUrl(?array $queryOptions = NULL){
+	protected function genUrl(?array $queryOptions = null): string {
 		$url = $this->dsn;
-		if($queryOptions) $url .= '/?'.http_build_query($queryOptions);
+
+		if ($queryOptions) {
+			$url .= (str_contains($url, '?') ? '&' : '/?') . http_build_query($queryOptions);
+		} elseif (!str_contains($url, '?')) {
+			$url .= '/?';
+		}
 
 		// длина параметров cURL
 		$querySize = strlen($url) - strlen($this->dsn);
-		if($querySize == 4078) $url .= ' ';
+		if ($querySize === 4078) {
+			$url .= ' ';
+		}
 
 		return $url;
 	}
 
-	protected function throwError(string $message, int $code = 0){
-		$this->error = new \stdClass();
+	protected function throwError(string $message, int $code = 0): never {
+		$message = mb_convert_encoding($message, 'UTF-8', 'UTF-8');
 
-//		$this->error->message = iconv('utf-8', 'utf-8//IGNORE', $message);
-		$this->error->message = mb_convert_encoding($message, 'utf-8', 'utf-8');
-		$this->error->code = $code;
+		$this->error = new Exception($message, $code);
 
-		throw new \Exception($this->error->message, $this->error->code);
+		throw $this->error;
 	}
 
-	// внимание: при установки $async = true нет гарантии, что запрос будет выполнен, эмулируется через таймаут в 200 ms
-	protected function call(?string $format = NULL, ?array $queryOptions = NULL, array $curlOptions = [], bool $async = false){
-		$queryOptions = array_merge($this->options, (array)$queryOptions);
+	// внимание: при установке $async = true нет гарантии, что запрос будет выполнен, эмулируется через таймаут в 200 ms
+	protected function call(
+		int|string|null $format = null,
+		?array $queryOptions = null,
+		array $curlOptions = [],
+		bool $async = false,
+	): mixed {
+		$queryOptions = array_merge($this->options, $queryOptions ?? []);
 
-		$this->rows_before_limit_at_least = NULL;
-		$this->statistics = NULL;
-		$this->meta = NULL;
+		$this->rows_before_limit_at_least = null;
+		$this->statistics = null;
+		$this->meta = null;
 
-		$query = $this->query;
-		$this->query = NULL; // освободить память
+		$query = $this->query ?? '';
+		$this->query = null; // освободить память
 
-		if($format){
-			if(!Formats::checkForRead($format)) $this->throwError("PDO_CH, config: Unknown read format $format");
-
-			switch($format){
-				case Formats::FETCH_OBJ:
-				case Formats::FETCH_ASSOC:
-					$query .= "\nFORMAT JSON";
-					break;
-
-				case Formats::FETCH_NUM:
-				case Formats::FETCH_COLUMN:
-				case Formats::FETCH_KEY_PAIR:
-					$query .= "\nFORMAT JSONCompact";
-					break;
-
-				default:
-					$query .= "\nFORMAT $format";
+		if ($format !== null) {
+			if (!Formats::checkForRead($format)) {
+				$this->throwError("PDO_CH, config: Unknown read format $format");
 			}
+
+			$query .= match ($format) {
+				Formats::FETCH_OBJ,
+				Formats::FETCH_ASSOC => "\nFORMAT JSON",
+				Formats::FETCH_NUM,
+				Formats::FETCH_COLUMN,
+				Formats::FETCH_KEY_PAIR => "\nFORMAT JSONCompact",
+				default => "\nFORMAT $format",
+			};
 		}
 
-		if($async) $curlOptions[CURLOPT_TIMEOUT_MS] = 200;
+		if ($async) {
+			$curlOptions[CURLOPT_TIMEOUT_MS] = 200;
+		}
+
 		$this->setCurlOptions($query, $queryOptions, $curlOptions);
+
 		$result = curl_exec($this->curlHundler);
 
-		if(curl_errno($this->curlHundler)){
-			if($async and curl_errno($this->curlHundler) == 28 and curl_getinfo($this->curlHundler)['size_upload']) return '';
-
-			$this->throwError('Curl: '.curl_error($this->curlHundler), curl_errno($this->curlHundler));
-		}
-
-		$resultHeader = substr($result, 0, curl_getinfo($this->curlHundler, CURLINFO_HEADER_SIZE));
-		$result = substr($result, curl_getinfo($this->curlHundler, CURLINFO_HEADER_SIZE));
-
-		$statusCode = NULL;
-		$statusesCodes = NULL;
-		preg_match_all('/^HTTP\/\d\.?\d? (\d+) /m', $resultHeader, $statusesCodes);
-		if($statusesCodes){
-			$statusCode = $statusesCodes[1][count($statusesCodes[1]) - 1];
-		}
-
-		if($statusCode){
-			if($statusCode != 200){
-				if(preg_match('/^\s*Code: (\d+)\.\s*(.+)$/s', $result, $matches)){
-					$code = (int) $matches[1];
-					$message = $matches[2];
-				}else{
-					$message = $result;
-					$code = 0;
-				}
-
-				$this->throwError($message, $code);
+		$curlErrno = curl_errno($this->curlHundler);
+		if ($curlErrno) {
+			if ($async && $curlErrno === CURLE_OPERATION_TIMEDOUT && curl_getinfo($this->curlHundler, CURLINFO_SIZE_UPLOAD) > 0) {
+				return '';
 			}
+
+			$this->throwError('Curl: ' . curl_error($this->curlHundler), $curlErrno);
 		}
 
-		if($format){
+		if (!is_string($result)) {
+			$this->throwError('Undefined error');
+		}
+
+		$headerSize = curl_getinfo($this->curlHundler, CURLINFO_HEADER_SIZE);
+		$resultHeader = substr($result, 0, $headerSize);
+		$result = substr($result, $headerSize);
+
+		$statusCode = null;
+		if (preg_match_all('/^HTTP\/\d\.?\d? (\d+) /m', $resultHeader, $statusesCodes) && $statusesCodes[1] !== []) {
+			$statusCode = (int) array_last($statusesCodes[1]);
+		}
+
+		if ($statusCode !== null && $statusCode !== 200) {
+			if (preg_match('/^\s*Code: (\d+)\.\s*(.+)$/s', $result, $matches)) {
+				$code = (int) $matches[1];
+				$message = $matches[2];
+			} else {
+				$message = $result;
+				$code = 0;
+			}
+
+			$this->throwError($message, $code);
+		}
+
+		if ($format !== null) {
 			$result = Formats::prepareResult($result, $format, $this->rows_before_limit_at_least, $this->statistics, $this->meta);
 		}
 
-		if(is_null($result)) $this->throwError('Undefined error');
+		if ($result === null) {
+			$this->throwError('Undefined error');
+		}
 
 		return $result;
 	}
 
-	function query($query){
+	public function query(string $query): static {
 		$this->query = $query;
 
 		return $this;
 	}
 
-	function fetchColumn($column_number = 0, ?array $options = NULL, array $curlOptions = []){
-		$this->resourceQuery = NULL;
+	public function fetchColumn(int $column_number = 0, ?array $options = null, array $curlOptions = []): mixed {
+		$this->resourceQuery = null;
 
 		$result = $this->call(Formats::FETCH_NUM, $options, $curlOptions);
-		if(count($result) === 0)
-			$result = false;
-		else
-			$result = $result[0][$column_number]??NULL;
+		if (!is_array($result) || $result === []) {
+			return false;
+		}
 
-		return $result;
+		$row = $result[0] ?? null;
+
+		return is_array($row) ? ($row[$column_number] ?? null) : null;
 	}
 
 	// внимание, это SQL statement, не путать с PDOStatement
 	// всегда возвращает первую строку результата
-	function fetch($format = Formats::FETCH_ASSOC, ?array $options = NULL, array $curlOptions = []){
-		$this->resourceQuery = NULL;
-		if($format != Formats::FETCH_OBJ and $format != Formats::FETCH_ASSOC and $format != Formats::FETCH_NUM and $format != Formats::FETCH_COLUMN){
+	public function fetch(int|string $format = Formats::FETCH_ASSOC, ?array $options = null, array $curlOptions = []): mixed {
+		$this->resourceQuery = null;
+		if (!in_array($format, [Formats::FETCH_OBJ, Formats::FETCH_ASSOC, Formats::FETCH_NUM, Formats::FETCH_COLUMN], true)) {
 			$this->throwError('PDO_CH, fetch can only be used with FETCH_ASSOC or FETCH_NUM or FETCH_COLUMN');
 		}
 
 		$result = $this->fetchAll($format, $options, $curlOptions);
 
-		$currentItem = 0;
-		$result = $result[$currentItem]??false;
-
-		return $result;
+		return $result[0] ?? false;
 	}
 
-	function fetchAll($format = Formats::FETCH_ASSOC, ?array $options = NULL, array $curlOptions = []){
-		$this->resourceQuery = NULL;
+	public function fetchAll(int|string $format = Formats::FETCH_ASSOC, ?array $options = null, array $curlOptions = []): mixed {
+		$this->resourceQuery = null;
 
 		return $this->call($format, $options, $curlOptions);
 	}
 
-	function exec(string $query, ?array $options = NULL, array $curlOptions = [], bool $async = false){
+	public function exec(string $query, ?array $options = null, array $curlOptions = [], bool $async = false): ?bool {
 		$this->query = $query;
-		$this->resourceQuery = NULL;
+		$this->resourceQuery = null;
 
-		$result = $this->call(NULL, $options, $curlOptions, $async);
+		$result = $this->call(null, $options, $curlOptions, $async);
 
-		if($result === '') return true;
+		if ($result === '') {
+			return true;
+		}
+
+		return null;
 	}
 
-	function execWithResource(string $query, $resource, string $format, ?array $options = NULL, array $curlOptions = []){
-		if(getType($resource) != 'resource') $this->throwError('$resource is not s valid resource');
-		if(get_resource_type($resource) != 'stream') $this->throwError('$resource is not a valid stream resource');
+	public function execWithResource(string $query, mixed $resource, string $format, ?array $options = null, array $curlOptions = []): ?bool {
+		if (!is_resource($resource)) {
+			$this->throwError('$resource is not a valid resource');
+		}
+
+		if (get_resource_type($resource) !== 'stream') {
+			$this->throwError('$resource is not a valid stream resource');
+		}
 
 		$this->query = $query;
 		$this->resourceQuery = $resource;
@@ -238,35 +309,38 @@ class PDO_CH{
 
 		$result = $this->call($format, $options, $curlOptions);
 
-		if($result === '') return true;
+		if ($result === '') {
+			return true;
+		}
+
+		return null;
 	}
 
-	function errorCode(){
-		return $this->error->code??NULL;
+	public function errorCode(): ?int {
+		return $this->error?->getCode();
 	}
 
-	function errorInfo(){
+	public function errorInfo(): array {
 		return [
 			'--',
-			$this->error->code??NULL,
-			$this->error->message??NULL
+			$this->error?->getCode(),
+			$this->error?->getMessage(),
 		];
 	}
 
-	function getRowsBeforeLimitAtLeast(){
+	public function getRowsBeforeLimitAtLeast(): ?int {
 		return $this->rows_before_limit_at_least;
 	}
 
-	function getStatistics(){
-		return (array)$this->statistics;
+	public function getStatistics(): array {
+		return $this->statistics ?? [];
 	}
 
-	function getMeta(){
-		return (array)$this->meta;
+	public function getMeta(): array {
+		return $this->meta ?? [];
 	}
 
-	function getCurlHundler(){
+	public function getCurlHundler(): CurlHandle {
 		return $this->curlHundler;
 	}
-
 }

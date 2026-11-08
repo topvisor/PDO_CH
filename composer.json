@@ -1,27 +1,48 @@
 {
-	"name":"topvisor/pdo_ch",
-	"description":"PHP ClickHouse HTTP client",
-	"keywords":[
+	"version": "1.11+zstd",
+	"name": "topvisor/pdo_ch",
+	"description": "PHP ClickHouse HTTP client",
+	"keywords": [
 		"clickhouse",
 		"http client",
 		"php",
 		"curl"
 	],
-	"license":"MIT",
-	"type":"library",
-	"authors":[
+	"homepage": "https://github.com/topvisor/PDO_CH",
+	"license": "MIT",
+	"type": "library",
+	"authors": [
 		{
-			"name":"Artemeey",
-			"email":"artemeey.ru@mail.ru"
+			"name": "Artemeey",
+			"email": "artemeey.ru@mail.ru"
 		}
 	],
-	"require":{
-		"php":">=7.4",
-		"ext-curl": "*"
+	"require": {
+		"php": ">=8.5",
+		"ext-curl": "*",
+		"ext-mbstring": "*",
+		"ext-pdo": "*"
 	},
-	"autoload":{
-		"psr-4":{
-			"Topvisor\\PDO_CH\\":"src/"
+	"suggest": {
+		"ext-zlib": "Required for gzip request compression (enable_http_compression)",
+		"ext-zstd": "Required for zstd request compression (enable_http_compression = \"zstd\")"
+	},
+	"autoload": {
+		"psr-4": {
+			"Topvisor\\PDO_CH\\": "src/"
 		}
+	},
+	"scripts": {
+		"lint": [
+			"@php -l src/Formats.php",
+			"@php -l src/PDO_CH.php"
+		]
+	},
+	"config": {
+		"sort-packages": true
+	},
+	"support": {
+		"issues": "https://github.com/topvisor/PDO_CH/issues",
+		"source": "https://github.com/topvisor/PDO_CH"
 	}
 }

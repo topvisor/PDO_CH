@@ -1,56 +1,64 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Topvisor\PDO_CH;
 
-class Formats{
+use PDO;
 
+class Formats {
 	// CSV
-	const CSV = 'CSV';
-	const CSVWithNames = 'CSVWithNames';
+	public const string CSV = 'CSV';
+	public const string CSVWithNames = 'CSVWithNames';
 	// assoc with statistics
-	const JSON = 'JSON';
+	public const string JSON = 'JSON';
 	// assoc with statistics
-	const JSONCompact = 'JSONCompact';
+	public const string JSONCompact = 'JSONCompact';
 	// assoc
-	const JSONEachRow = 'JSONEachRow';
+	public const string JSONEachRow = 'JSONEachRow';
 	// Null
-	const _NULL = 'Null';
+	public const string _NULL = 'Null';
 	// Pretty text
-	const Pretty = 'Pretty';
-	const PrettyCompact = 'PrettyCompact';
-	const PrettyCompactMonoBlock = 'PrettyCompactMonoBlock';
-	const PrettySpace = 'PrettySpace';
-	const PrettyNoEscapes = 'PrettyNoEscapes';
-	const PrettyCompactNoEscapes = 'PrettyCompactNoEscapes';
-	const PrettySpaceNoEscapes = 'PrettySpaceNoEscapes';
+	public const string Pretty = 'Pretty';
+	public const string PrettyCompact = 'PrettyCompact';
+	public const string PrettyCompactMonoBlock = 'PrettyCompactMonoBlock';
+	public const string PrettySpace = 'PrettySpace';
+	public const string PrettyNoEscapes = 'PrettyNoEscapes';
+	public const string PrettyCompactNoEscapes = 'PrettyCompactNoEscapes';
+	public const string PrettySpaceNoEscapes = 'PrettySpaceNoEscapes';
 	// TabSeparated
-	const TabSeparated = 'TabSeparated';
-	const TabSeparatedRaw = 'TabSeparatedRaw';
-	const TSVRaw = 'TSVRaw';
-	const TabSeparatedWithNames = 'TabSeparatedWithNames';
-	const TabSeparatedWithNamesAndTypes = 'TabSeparatedWithNamesAndTypes';
+	public const string TabSeparated = 'TabSeparated';
+	public const string TabSeparatedRaw = 'TabSeparatedRaw';
+	public const string TSVRaw = 'TSVRaw';
+	public const string TabSeparatedWithNames = 'TabSeparatedWithNames';
+	public const string TabSeparatedWithNamesAndTypes = 'TabSeparatedWithNamesAndTypes';
 	// XML
-	const XML = 'XML';
+	public const string XML = 'XML';
 	// OBJECT
-	const FETCH_OBJ = \PDO::FETCH_OBJ;
-	const FETCH_ASSOC = \PDO::FETCH_ASSOC;
-	const FETCH_NUM = \PDO::FETCH_NUM;
-	const FETCH_COLUMN = \PDO::FETCH_COLUMN;
-	const FETCH_KEY_PAIR = \PDO::FETCH_KEY_PAIR;
+	public const int FETCH_OBJ = PDO::FETCH_OBJ;
+	public const int FETCH_ASSOC = PDO::FETCH_ASSOC;
+	public const int FETCH_NUM = PDO::FETCH_NUM;
+	public const int FETCH_COLUMN = PDO::FETCH_COLUMN;
+	public const int FETCH_KEY_PAIR = PDO::FETCH_KEY_PAIR;
 
-	static function checkForRead(string $format){
-		if($format == self::FETCH_OBJ) return true;
-		if($format == self::FETCH_ASSOC) return true;
-		if($format == self::FETCH_NUM) return true;
-		if($format == self::FETCH_COLUMN) return true;
-		if($format == self::FETCH_KEY_PAIR) return true;
-		if(defined("self::$format")) return true;
+	public static function checkForRead(int|string $format): bool {
+		if (is_int($format)) {
+			return in_array($format, [
+				self::FETCH_OBJ,
+				self::FETCH_ASSOC,
+				self::FETCH_NUM,
+				self::FETCH_COLUMN,
+				self::FETCH_KEY_PAIR,
+			], true);
+		}
 
-		return false;
+		if ($format === self::_NULL) return true;
+
+		return defined(self::class . '::' . $format);
 	}
 
-	static function checkForWrite(string $format){
-		switch($format){
+	public static function checkForWrite(int|string $format): bool {
+		switch ($format) {
 			case self::CSV:
 			case self::CSVWithNames:
 			case self::JSONEachRow:
@@ -65,52 +73,59 @@ class Formats{
 		return false;
 	}
 
-	static function prepareResult(string $result, ?string $format = NULL, ?int &$rows_before_limit_at_least = NULL, ?array &$statistics = NULL, ?array &$meta = NULL){
-		$isAssocc = false;
+	public static function prepareResult(
+		string $result,
+		int|string|null $format = null,
+		?int &$rows_before_limit_at_least = null,
+		?array &$statistics = null,
+		?array &$meta = null,
+	): mixed {
+		$isAssoc = false;
 
-		switch($format){
+		switch ($format) {
 			case self::FETCH_ASSOC:
 			case self::FETCH_NUM:
-				$isAssocc = true;
+				$isAssoc = true;
 
+			// no break
 			case self::FETCH_OBJ:
 			case self::FETCH_COLUMN:
 			case self::FETCH_KEY_PAIR:
-				$result = json_decode($result, $isAssocc);
-				if(!$result) return $result;
+				$result = json_decode($result, $isAssoc);
+				if (!$result) return $result;
 
-				if($isAssocc){
-					$rows_before_limit_at_least = $result['rows_before_limit_at_least']??NULL;
-					$statistics = $result['statistics']??NULL;
-					$meta = $result['meta']??NULL;
-				}else{
-					$rows_before_limit_at_least = $result->rows_before_limit_at_least??NULL;
-					$statistics = $result->statistics??NULL;
-					$meta = $result->meta??NULL;
+				if ($isAssoc) {
+					$rows_before_limit_at_least = isset($result['rows_before_limit_at_least']) ? (int) $result['rows_before_limit_at_least'] : null;
+					$statistics = (array) ($result['statistics'] ?? []);
+					$meta = (array) ($result['meta'] ?? []);
+				} else {
+					$rows_before_limit_at_least = isset($result->rows_before_limit_at_least) ? (int) $result->rows_before_limit_at_least : null;
+					$statistics = (array) ($result->statistics ?? []);
+					$meta = (array) ($result->meta ?? []);
 				}
 
 				break;
 		}
 
-		switch($format){
+		switch ($format) {
 			case self::FETCH_OBJ:
-				$result = $result->data??NULL;
+				$result = $result->data ?? null;
 
 				break;
 
 			case self::FETCH_ASSOC:
 			case self::FETCH_NUM:
-				$result = $result['data']??NULL;
+				$result = $result['data'] ?? null;
 
 				break;
 
 			case self::FETCH_COLUMN:
-				$result = array_column($result->data, 0);
+				$result = array_column((array) ($result->data ?? []), 0);
 
 				break;
 
 			case self::FETCH_KEY_PAIR:
-				$result = array_column($result->data, 1, 0);
+				$result = array_column((array) ($result->data ?? []), 1, 0);
 
 				break;
 		}
