@@ -71,13 +71,17 @@ class PDO_CH {
 		$options[CURLOPT_USERPWD] = "$this->username:$this->password";
 
 		$compression = !empty($queryOptions['enable_http_compression']);
+		$compressionCodec = null;
+
 		if ($compression) {
 			$options[CURLOPT_ENCODING] ??= 'gzip';
 
-			$compressionCodec = null;
 			foreach ($options[CURLOPT_HTTPHEADER] ?? [] as $header) {
 				if (stripos($header, 'Content-Encoding:') === 0) {
-					preg_match('/Content-Encoding:\s*([\w-]+)/i', $header, $matches);
+					if (!preg_match('/Content-Encoding:\s*([\w-]+)/i', $header, $matches)) {
+						$this->throwError('Curl: invalid Content-Encoding header');
+					}
+
 					$compressionCodec = strtolower($matches[1]);
 
 					break;
@@ -86,7 +90,6 @@ class PDO_CH {
 
 			if ($compressionCodec === null) {
 				$compressionCodec = 'gzip';
-
 				$options[CURLOPT_HTTPHEADER][] = 'Content-Encoding: gzip';
 			}
 		}
